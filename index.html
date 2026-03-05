@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>지구 내부 지진파 탐사 - 굴절 대비 강화</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 20px; }
+        .canvas-container { position: relative; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        canvas { background: #ffffff; border-radius: 50%; cursor: crosshair; border: 3px solid #cbd5e1; }
+        .controls { margin-top: 20px; display: flex; gap: 10px; }
+        button { padding: 12px 24px; font-size: 15px; cursor: pointer; border: none; border-radius: 8px; font-weight: bold; transition: 0.2s; }
+        .btn-toggle { background: #ef4444; color: white; }
+        .btn-reset { background: #64748b; color: white; }
+        .theory-box { margin-top: 25px; padding: 18px; background: #ffffff; border-radius: 12px; border-left: 5px solid #2563eb; width: 600px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .theory-box h3 { margin: 0 0 10px 0; color: #2563eb; font-size: 1.1em; }
+        .theory-box p { margin: 4px 0; font-size: 0.95em; line-height: 1.5; color: #475569; }
+        .highlight-in { color: #d97706; font-weight: bold; } /* 안으로 꺾임 */
+        .highlight-out { color: #2563eb; font-weight: bold; } /* 밖으로 꺾임 */
+    </style>
+</head>
+<body>
+    <div class="canvas-container">
+        <canvas id="earthCanvas" width="600" height="600"></canvas>
+    </div>
+
+    <div class="controls">
+        <button class="btn-toggle" id="toggleBtn" onclick="toggleLayers()">내부 구조 보기: OFF</button>
+        <button class="btn-reset" onclick="resetSimulation()">기록 초기화</button>
+    </div>
+
+    <div class="theory-box">
+        <h3>💡 굴절 방향의 비밀</h3>
+        <p>• <span class="highlight-in">외핵 진입 (감속):</span> 파동이 안쪽(중심)으로 꺾입니다.</p>
+        <p>• <span class="highlight-out">내핵 진입 (가속):</span> 파동이 바깥쪽(지표)으로 꺾입니다.</p>
+        <p>• 이 차이로 인해 내핵을 통과한 파동은 경로가 보정되어 지표에 더 빨리 도달합니다.</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('earthCanvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const earthR = 270;
+        
+        const config = {
+            mantle: { r: earthR * 0.99, color: '#ff9d5c', speed: 1.2 },
+            outerCore: { r: earthR * 0.55, color: '#ffff80', speed: 0.55 },
+            innerCore: { r: earthR * 0.22, color: '#ffffff', speed: 1.6 }
+        };
+
+        let showLayers = false;
+        let waves = [];
+        let detections = [];
+        let isLooping = false;
+
+        function drawEarth() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, earthR, 0, Math.PI * 2);
+            ctx.fillStyle = "#f1f5f9";
+            ctx.fill();
+            ctx.strokeStyle = "#94a3b8";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            if (showLayers) {
+                [config.mantle, config.outerCore, config.innerCore].forEach(layer => {
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, layer.r, 0, Math.PI * 2);
+                    ctx.fillStyle = layer.color;
+                    ctx.fill();
+                    ctx.setLineDash([6, 6]);
+                    ctx.strokeStyle = "rgba(0,0,0,0.1)";
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                });
+            }
+
+            detections.forEach(d => {
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = "#ef4444";
+                ctx.fill();
+                ctx.font = "bold 13px Arial";
+                ctx.fillStyle = "#1e293b";
+                ctx.textAlign = d.x > centerX ? "left" : "right";
+                ctx.fillText(d.time + "s", d.x + (d.x > centerX ? 10 : -10), d.y + 5);
+            });
+        }
+
+        function mainLoop() {
+            let activeExists = false;
+            drawEarth();
+
+            waves.forEach(w => {
+                if (!w.active) return;
+                activeExists = true;
+
+                const dist = Math.sqrt((w.x - centerX)**2 + (w.y - centerY)**2);
+                let currentState = 'mantle';
+                if (dist <= config.innerCore.r) currentState = 'inner';
+                else if (dist <= config.outerCore.r) currentState = 'outer';
+
+                const normal = Math.atan2(w.y - centerY, w.x - centerX);
+                const incident = w.angle - normal;
+
+                // 상태 전이 시 굴절 로직
+                if (w.lastState !== currentState) {
+                    let refractionFactor = 0;
+                    // 속도 감소 -> 안으로 꺾임 (양수)
+                    if (w.lastState === 'mantle' && currentState === 'outer') refractionFactor = 0.8; 
+                    // 속도 증가 -> 밖으로 꺾임 (음수)
+                    else if (w.lastState === 'outer' && currentState === 'inner') refractionFactor = -0.4;
+                    // 속도 감소 -> 안으로 꺾임 (양수)
+                    else if (w.lastState === 'inner' && currentState === 'outer') refractionFactor = 0.4;
+                    // 속도 증가 -> 밖으로 꺾임 (음수)
+                    else if (w.lastState === 'outer' && currentState === 'mantle') refractionFactor = -0.6;
+
+                    w.angle += Math.sin(incident) * refractionFactor;
+                    w.lastState = currentState;
+                }
+
+                // 맨틀 내부 미세 곡선 전파
+                if (currentState === 'mantle') {
+                    w.angle -= Math.sin(incident) * 0.005; 
+                }
+
+                let speed = config[currentState === 'mantle' ? 'mantle' : (currentState === 'inner' ? 'innerCore' : 'outerCore')].speed;
+                const prevX = w.x;
+                const prevY = w.y;
+                w.x += Math.cos(w.angle) * speed;
+                w.y += Math.sin(w.angle) * speed;
+
+                ctx.beginPath();
+                ctx.strokeStyle = (currentState === 'outer') ? "#d97706" : "#3b82f6";
+                ctx.lineWidth = 2.5;
+                ctx.moveTo(prevX, prevY);
+                ctx.lineTo(w.x, w.y);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(w.x, w.y, 4.5, 0, Math.PI * 2);
+                ctx.fillStyle = (currentState === 'outer') ? "#f59e0b" : "#3b82f6";
+                ctx.fill();
+
+                if (dist > earthR && w.pathLen > 40) {
+                    w.active = false;
+                    detections.push({x: w.x, y: w.y, time: ((Date.now() - w.startTime) / 1000).toFixed(2)});
+                }
+                w.pathLen++;
+            });
+
+            if (activeExists) requestAnimationFrame(mainLoop);
+            else isLooping = false;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const startX = e.clientX - rect.left;
+            const startY = e.clientY - rect.top;
+            const now = Date.now();
+            const angleToCenter = Math.atan2(centerY - startY, centerX - startX);
+
+            for (let i = -1.2; i <= 1.2; i += 0.15) {
+                waves.push({ x: startX, y: startY, angle: angleToCenter + i, active: true, startTime: now, lastState: 'mantle', pathLen: 0 });
+            }
+            if (!isLooping) { isLooping = true; mainLoop(); }
+        });
+
+        function toggleLayers() {
+            showLayers = !showLayers;
+            document.getElementById('toggleBtn').innerText = showLayers ? "내부 구조 보기: ON" : "내부 구조 보기: OFF";
+            if (!isLooping) drawEarth();
+        }
+
+        function resetSimulation() { waves = []; detections = []; drawEarth(); }
+        drawEarth();
+    </script>
+</body>
+</html>
