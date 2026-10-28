@@ -1,180 +1,858 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>지구 내부 지진파 탐사 - 굴절 대비 강화</title>
-    <style>
-        body { font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 20px; }
-        .canvas-container { position: relative; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        canvas { background: #ffffff; border-radius: 50%; cursor: crosshair; border: 3px solid #cbd5e1; }
-        .controls { margin-top: 20px; display: flex; gap: 10px; }
-        button { padding: 12px 24px; font-size: 15px; cursor: pointer; border: none; border-radius: 8px; font-weight: bold; transition: 0.2s; }
-        .btn-toggle { background: #ef4444; color: white; }
-        .btn-reset { background: #64748b; color: white; }
-        .theory-box { margin-top: 25px; padding: 18px; background: #ffffff; border-radius: 12px; border-left: 5px solid #2563eb; width: 600px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .theory-box h3 { margin: 0 0 10px 0; color: #2563eb; font-size: 1.1em; }
-        .theory-box p { margin: 4px 0; font-size: 0.95em; line-height: 1.5; color: #475569; }
-        .highlight-in { color: #d97706; font-weight: bold; } /* 안으로 꺾임 */
-        .highlight-out { color: #2563eb; font-weight: bold; } /* 밖으로 꺾임 */
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>지진파로 알아보는 지구 속 구조</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --card: #ffffff;
+    --ink: #1f2937;
+    --sub: #6b7280;
+    --line: #e5e1d8;
+    --p: #2563eb;
+    --p-soft: #dbe7ff;
+    --s: #c81e1e;
+    --s-soft: #fde2e2;
+    --accent: #7c3aed;
+    --rock: #d9d3c7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: flex; flex-direction: column; overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+  button { font-family: inherit; }
+
+  /* ---------- 상단 ---------- */
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 16px; background: #1f2937; color: #fff; flex-shrink: 0;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; }
+  .clock {
+    margin-left: auto; display: flex; align-items: baseline; gap: 8px;
+    background: #111827; padding: 6px 14px; border-radius: 10px;
+  }
+  .clock small { color: #9ca3af; font-size: 13px; }
+  .clock b { font-size: 22px; font-variant-numeric: tabular-nums; min-width: 128px; text-align: right; }
+  .hbtns { display: flex; gap: 8px; }
+  .hbtn {
+    border: none; border-radius: 10px; padding: 10px 14px; font-size: 15px; font-weight: 700;
+    cursor: pointer; background: #374151; color: #fff; white-space: nowrap;
+  }
+  .hbtn:active { transform: scale(0.97); }
+  .hbtn:disabled { opacity: 0.4; cursor: default; }
+  .hbtn.reveal { background: var(--accent); }
+  .hbtn.reveal.on { background: #fbbf24; color: #1f2937; }
+
+  /* ---------- 본문 ---------- */
+  main { flex: 1; display: flex; gap: 12px; padding: 12px; min-height: 0; }
+  .earth-wrap {
+    flex: 1; min-width: 0; background: var(--card); display: flex; flex-direction: column;
+    border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden;
+  }
+  .etop { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 10px 0; flex-wrap: wrap; }
+  .cvbox { flex: 1; position: relative; min-height: 0; }
+  #earth { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.92); border: 1.5px solid var(--line); font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .chip input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+  .chip .sw { width: 16px; height: 4px; border-radius: 2px; }
+  .speed { display: flex; background: #fff; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .speed button { border: none; background: transparent; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--sub); line-height: 1.25; }
+  .speed button b { display: block; font-size: 14px; color: var(--ink); }
+  .speed button.on { background: var(--ink); color: #d1d5db; }
+  .speed button.on b { color: #fff; }
+  .info { font-size: 14px; padding: 0 14px 10px; line-height: 1.5; color: #374151; }
+  .info b { font-variant-numeric: tabular-nums; }
+  .toast {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3;
+    background: #1f2937; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; max-width: 80%; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ---------- 오른쪽 ---------- */
+  aside { width: 460px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .card { background: var(--card); border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  .graph-card { padding: 12px 14px 10px; flex-shrink: 0; }
+  .card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .card-title h2 { font-size: 16px; margin: 0; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sub); cursor: pointer; }
+  .toggle input { width: 18px; height: 18px; margin: 0; }
+  #graph { width: 100%; height: 300px; display: block; }
+
+  .tab-card { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1.5px solid var(--line); flex-shrink: 0; }
+  .tabs button {
+    flex: 1; border: none; background: none; padding: 12px 6px; font-size: 15px; font-weight: 700;
+    color: var(--sub); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1.5px;
+  }
+  .tabs button.on { color: var(--ink); border-bottom-color: var(--ink); }
+  .tabs button:disabled { opacity: 0.45; cursor: default; }
+  .pane { flex: 1; overflow-y: auto; padding: 12px 14px; display: none; -webkit-user-select: text; user-select: text; }
+  .pane.on { display: block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-size: 13px; color: var(--sub); font-weight: 600; padding: 6px 8px; border-bottom: 1.5px solid var(--line); position: sticky; top: -12px; background: #fff; }
+  td { padding: 7px 8px; border-bottom: 1px solid #f0ede6; }
+  #recTable tr { cursor: pointer; }
+  #recTable tbody tr:active, #recTable tr.sel td { background: #fff7d6; }
+  .tp { color: var(--p); font-weight: 700; }
+  .ts { color: var(--s); font-weight: 700; }
+  .tw { color: var(--p); font-weight: 600; opacity: 0.75; }
+  .tn { color: #9ca3af; }
+  .empty { color: var(--sub); font-size: 14px; text-align: center; padding: 30px 10px; line-height: 1.6; }
+
+  .step { border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .step h3 { font-size: 15px; margin: 0 0 4px; display: flex; gap: 8px; align-items: center; }
+  .step h3 .n { background: var(--ink); color: #fff; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step p { margin: 4px 0; font-size: 14px; line-height: 1.55; color: #374151; }
+  .step details { margin-top: 4px; font-size: 13px; color: var(--sub); }
+  .step summary { cursor: pointer; font-weight: 600; }
+  .step.final { border-color: var(--accent); background: #f6f1ff; }
+
+  .layer-table td:first-child { font-weight: 700; white-space: nowrap; }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,0.15); }
+  .evidence { margin: 12px 0 0; padding: 0; list-style: none; }
+  .evidence li { font-size: 14px; line-height: 1.55; padding: 8px 10px; background: #faf8f3; border-radius: 10px; margin-bottom: 8px; }
+  .evidence li b { color: var(--accent); }
+  #velGraph { width: 100%; height: 190px; display: block; margin-top: 10px; }
+  .note { font-size: 12px; color: var(--sub); margin-top: 8px; line-height: 1.5; }
+
+  /* 세로 화면/좁은 화면 */
+  @media (max-width: 960px) {
+    body { overflow: auto; height: auto; }
+    main { flex-direction: column; }
+    .earth-wrap { height: 100vw; flex: none; }
+    aside { width: 100%; }
+    .tab-card { min-height: 420px; }
+    header { flex-wrap: wrap; }
+    .clock { margin-left: 0; }
+  }
+</style>
 </head>
 <body>
-    <div class="canvas-container">
-        <canvas id="earthCanvas" width="600" height="600"></canvas>
+<header>
+  <h1>🌏 지진파로 알아보는 지구 속 구조</h1>
+  <div class="clock"><small>지진 발생 후</small><b id="clock">--분 --초</b></div>
+  <div class="hbtns">
+    <button class="hbtn" id="playBtn" disabled>⏸ 일시정지</button>
+    <button class="hbtn" id="replayBtn" disabled>↺ 다시 보기</button>
+    <button class="hbtn" id="clearBtn">🗑 지우기</button>
+    <button class="hbtn reveal" id="revealBtn">🔍 내부 구조 공개</button>
+  </div>
+</header>
+
+<main>
+  <section class="earth-wrap" id="earthWrap">
+    <div class="etop">
+    <div class="chips">
+      <label class="chip"><input type="checkbox" id="showP" checked><span class="sw" style="background:var(--p)"></span>P파</label>
+      <label class="chip"><input type="checkbox" id="showS" checked><span class="sw" style="background:var(--s)"></span>S파</label>
+      <label class="chip"><input type="checkbox" id="showFront" checked>2분마다 파면 남기기</label>
+    </div>
+    <div class="speed" id="speed">
+      <button data-v="30"><b>느리게</b>1초=30초</button>
+      <button data-v="60" class="on"><b>보통</b>1초=1분</button>
+      <button data-v="120"><b>빠르게</b>1초=2분</button>
+    </div>
+    </div>
+    <div class="cvbox"><canvas id="earth"></canvas><div class="toast" id="toast"></div></div>
+    <div class="info" id="info">지표 가까운 곳(지하 0~700km)을 눌러 지진을 일으켜 보세요.</div>
+  </section>
+
+  <aside>
+    <div class="card graph-card">
+      <div class="card-title">
+        <h2>📈 진앙 거리에 따른 도착 시간</h2>
+        <label class="toggle"><input type="checkbox" id="showUniform">속도가 어디서나 같다면?</label>
+      </div>
+      <canvas id="graph"></canvas>
     </div>
 
-    <div class="controls">
-        <button class="btn-toggle" id="toggleBtn" onclick="toggleLayers()">내부 구조 보기: OFF</button>
-        <button class="btn-reset" onclick="resetSimulation()">기록 초기화</button>
+    <div class="card tab-card">
+      <div class="tabs">
+        <button data-tab="rec" class="on">관측 기록</button>
+        <button data-tab="quest">탐구 질문</button>
+        <button data-tab="struct" id="structTab" disabled>🔒 내부 구조</button>
+      </div>
+
+      <div class="pane on" id="pane-rec">
+        <div class="empty" id="recEmpty">지진을 일으키면 관측소마다<br>P파와 S파가 도착한 시간이 기록돼요.</div>
+        <table id="recTable" style="display:none">
+          <thead><tr><th>관측소 (진앙 거리)</th><th>P파 도착</th><th>S파 도착</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="pane" id="pane-quest">
+        <div class="step"><h3><span class="n">1</span>지진 일으키기</h3>
+          <p>지구 단면의 지표 가까운 곳을 눌러 지진을 일으켜 보자. <b class="tp">P파</b>와 <b class="ts">S파</b> 중 관측소에 먼저 도착하는 것은 무엇일까?</p>
+        </div>
+        <div class="step"><h3><span class="n">2</span>그래프 읽기</h3>
+          <p>진앙에서 멀어질수록 도착 시간은 어떻게 변할까? 그래프 위의 <b>‘속도가 어디서나 같다면?’</b>을 켜고 실제 기록과 비교해 보자.</p>
+        </div>
+        <div class="step"><h3><span class="n">3</span>P파가 오지 않는 관측소</h3>
+          <p>P파가 도착하지 않은 관측소는 진앙에서 약 몇 °부터 몇 ° 사이에 있을까? 그 사이에서 <b>아주 약하게</b> 도착한 P파도 찾아보자.</p>
+          <details><summary>힌트</summary>그래프 아래 띠에서 회색 칸이 P파가 도착하지 않은 관측소예요. 지구 단면에서 P파가 깊은 곳에 들어갈 때 어떻게 꺾이는지도 살펴보세요.</details>
+        </div>
+        <div class="step"><h3><span class="n">4</span>S파가 사라지는 곳</h3>
+          <p>S파는 진앙에서 약 몇 ° 넘게 떨어진 관측소에 도착하지 않을까? 지구 단면에서 S파가 어느 깊이쯤에서 멈추는지 살펴보자.</p>
+          <details><summary>힌트</summary>S파는 고체 속은 지나가지만 액체 속은 지나가지 못해요.</details>
+        </div>
+        <div class="step"><h3><span class="n">5</span>파면 간격 비교하기</h3>
+          <p>‘2분마다 파면 남기기’를 켜고 보자. 파면 사이의 간격이 넓은 곳과 좁은 곳은 어디일까? 간격이 좁아지면 지진파의 속도는 어떻게 된 것일까?</p>
+        </div>
+        <div class="step"><h3><span class="n">6</span>진원 깊이 바꿔 보기</h3>
+          <p>지표 바로 아래와 깊은 곳(약 700km)에서 각각 지진을 일으켜 보자. 결과가 크게 달라질까?</p>
+        </div>
+        <div class="step final"><h3><span class="n">7</span>내 생각 정리하기</h3>
+          <p>지구 속은 몇 개의 층으로 되어 있을까? 층의 경계는 깊이 약 몇 km쯤에 있을까? 각 층은 고체일까, 액체일까?</p>
+          <p>생각을 정리했다면 위의 <b>🔍 내부 구조 공개</b> 버튼을 눌러 확인해 보자.</p>
+        </div>
+      </div>
+
+      <div class="pane" id="pane-struct">
+        <table class="layer-table">
+          <thead><tr><th>층</th><th>깊이</th><th>상태</th><th>P파 속도</th><th>S파 속도</th></tr></thead>
+          <tbody>
+            <tr><td><span class="dot" style="background:#9a6b3f"></span>지각</td><td>0~약 35km</td><td>고체</td><td>약 6km/s</td><td>약 3.5km/s</td></tr>
+            <tr><td><span class="dot" style="background:#f6c39a"></span>맨틀</td><td>~약 2,900km</td><td>고체</td><td>8~13.7km/s</td><td>4.5~7.3km/s</td></tr>
+            <tr><td><span class="dot" style="background:#fde68a"></span>외핵</td><td>~약 5,100km</td><td><b>액체</b></td><td>8~10.4km/s</td><td><b>통과 못 함</b></td></tr>
+            <tr><td><span class="dot" style="background:#fffbea"></span>내핵</td><td>~6,371km</td><td>고체</td><td>약 11km/s</td><td>–</td></tr>
+          </tbody>
+        </table>
+        <canvas id="velGraph"></canvas>
+        <ul class="evidence">
+          <li><b>P파가 오지 않는 관측소</b> — 깊이 약 2,900km에서 P파 속도가 갑자기 느려지면서 크게 꺾여요. 그래서 진앙에서 약 103°~142° 떨어진 곳에는 P파가 거의 도착하지 않아요. → 맨틀 아래에 성질이 다른 층(<b>외핵</b>)이 있어요.</li>
+          <li><b>S파가 사라지는 곳</b> — S파는 깊이 약 2,900km 아래로 지나가지 못해요. 그래서 진앙에서 약 103°보다 먼 곳에는 S파가 도착하지 않아요. → 외핵은 <b>액체</b>예요.</li>
+          <li><b>약하게 도착한 P파</b> — P파가 오지 않던 곳 일부에 약한 P파가 도착해요. 외핵 안쪽에 P파가 다시 빨라지는 층이 있어 파동이 바깥쪽으로 꺾이기 때문이에요. → 가장 안쪽에 고체인 <b>내핵</b>이 있어요.</li>
+        </ul>
+        <p class="note">층과 층 사이의 경계: 지각–맨틀은 모호면, 맨틀–외핵은 구텐베르크면, 외핵–내핵은 레만면이라고 해요.<br>
+        이 프로그램의 속도는 실제 지구 연구 자료를 단순하게 만든 값이에요. 실제 지구의 각도·시간과는 조금 다를 수 있어요.</p>
+      </div>
     </div>
+  </aside>
+</main>
 
-    <div class="theory-box">
-        <h3>💡 굴절 방향의 비밀</h3>
-        <p>• <span class="highlight-in">외핵 진입 (감속):</span> 파동이 안쪽(중심)으로 꺾입니다.</p>
-        <p>• <span class="highlight-out">내핵 진입 (가속):</span> 파동이 바깥쪽(지표)으로 꺾입니다.</p>
-        <p>• 이 차이로 인해 내핵을 통과한 파동은 경로가 보정되어 지표에 더 빨리 도달합니다.</p>
-    </div>
+<script>
+// ===== 지진파 계산 엔진 (단위: km, 초) =====
+const R_EARTH = 6371, R_MOHO = 6336, R_CMB = 3480, R_ICB = 1221;
+const BOUNDS = [R_MOHO, R_CMB, R_ICB]; // 층 0|1, 1|2, 2|3 경계
 
-    <script>
-        const canvas = document.getElementById('earthCanvas');
-        const ctx = canvas.getContext('2d');
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        const earthR = 270;
-        
-        const config = {
-            mantle: { r: earthR * 0.99, color: '#ff9d5c', speed: 1.2 },
-            outerCore: { r: earthR * 0.55, color: '#ffff80', speed: 0.55 },
-            innerCore: { r: earthR * 0.22, color: '#ffffff', speed: 1.6 }
-        };
+function layerOf(r) { return r > R_MOHO ? 0 : r > R_CMB ? 1 : r > R_ICB ? 2 : 3; }
 
-        let showLayers = false;
-        let waves = [];
-        let detections = [];
-        let isLooping = false;
+// 맨틀 속도표 (깊이 km, P, S) — PREM을 단순화
+const MANTLE = [[35, 8.05, 4.5], [220, 8.5, 4.65], [400, 9.0, 4.9], [670, 10.4, 5.6], [771, 11.0, 6.2], [1000, 11.4, 6.35], [1500, 12.0, 6.6], [2000, 12.6, 6.85], [2500, 13.25, 7.1], [2741, 13.68, 7.27], [2891, 13.6, 7.2]];
+function mantleSeg(r) {
+  const d = R_EARTH - r;
+  let k = 0; while (k < MANTLE.length - 2 && d > MANTLE[k + 1][0]) k++;
+  return k;
+}
+// 층별 속도 (layer를 명시해 경계에서 양쪽 값을 구분)
+function vel(type, layer, r) {
+  if (layer === 0) return type === 'P' ? 6.0 : 3.5;
+  if (layer === 1) {
+    const k = mantleSeg(r), a = MANTLE[k], b = MANTLE[k + 1], c = type === 'P' ? 1 : 2;
+    const f = Math.min(1, Math.max(0, (R_EARTH - r - a[0]) / (b[0] - a[0])));
+    return a[c] + (b[c] - a[c]) * f;
+  }
+  if (layer === 2) {
+    if (type === 'S') return 0;
+    const f = (R_CMB - r) / (R_CMB - R_ICB);
+    return 8.06 + 2.3 * f;
+  }
+  return type === 'P' ? 11.0 + 0.3 * (R_ICB - r) / R_ICB : 3.6;
+}
+function dvdr(type, layer, r) {
+  if (layer === 1) {
+    const k = mantleSeg(r), a = MANTLE[k], b = MANTLE[k + 1], c = type === 'P' ? 1 : 2;
+    return -(b[c] - a[c]) / (b[0] - a[0]);
+  }
+  if (layer === 2) return type === 'P' ? -2.3 / (R_CMB - R_ICB) : 0;
+  if (layer === 3) return type === 'P' ? -0.3 / R_ICB : 0;
+  return 0;
+}
 
-        function drawEarth() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, earthR, 0, Math.PI * 2);
-            ctx.fillStyle = "#f1f5f9";
-            ctx.fill();
-            ctx.strokeStyle = "#94a3b8";
-            ctx.lineWidth = 3;
-            ctx.stroke();
+const DT = 0.5, T_MAX = 1560, SAMPLE = 2;
 
-            if (showLayers) {
-                [config.mantle, config.outerCore, config.innerCore].forEach(layer => {
-                    ctx.beginPath();
-                    ctx.arc(centerX, centerY, layer.r, 0, Math.PI * 2);
-                    ctx.fillStyle = layer.color;
-                    ctx.fill();
-                    ctx.setLineDash([6, 6]);
-                    ctx.strokeStyle = "rgba(0,0,0,0.1)";
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                });
-            }
+// 한 파선 추적. store=true면 SAMPLE초 간격 경로 저장
+function traceRay(type, fx, fy, ang, store) {
+  let x = fx, y = fy, ux = Math.cos(ang), uy = Math.sin(ang);
+  let layer = layerOf(Math.hypot(x, y)), t = 0, inner = false, core = false, refl = false;
+  const pts = store ? [x, y] : null;
+  let nextSample = SAMPLE;
+  const res = { type, ang, inner: false, core: false, end: 'time', endT: T_MAX, ex: x, ey: y };
+  while (t < T_MAX) {
+    const r = Math.hypot(x, y);
+    const v = vel(type, layer, r), g = dvdr(type, layer, r);
+    const ds = v * DT;
+    // 굴곡: du/ds = -(∇v - (u·∇v)u)/v, ∇v = g r̂
+    if (g !== 0) {
+      const nx = x / r, ny = y / r, dot = ux * nx + uy * ny;
+      ux -= (g * (nx - dot * ux)) / v * ds;
+      uy -= (g * (ny - dot * uy)) / v * ds;
+      const L = Math.hypot(ux, uy); ux /= L; uy /= L;
+    }
+    let nx2 = x + ux * ds, ny2 = y + uy * ds;
+    const r2 = Math.hypot(nx2, ny2);
+    const newLayer = r2 >= R_EARTH ? -1 : layerOf(r2);
+    if (newLayer !== layer) {
+      // 경계 반지름
+      const rb = newLayer === -1 ? R_EARTH : (newLayer < layer ? BOUNDS[layer - 1] : BOUNDS[layer]);
+      // |p + s*u*ds| = rb 풀기
+      const a = ds * ds, b = 2 * ds * (x * ux + y * uy), c = r * r - rb * rb;
+      const disc = Math.max(0, b * b - 4 * a * c);
+      let s = (-b + (c > 0 ? -1 : 1) * Math.sqrt(disc)) / (2 * a);
+      if (!(s >= 0 && s <= 1)) s = Math.min(1, Math.max(0, s));
+      x += ux * ds * s; y += uy * ds * s; t += DT * s;
+      if (newLayer === -1) {
+        res.end = 'surface'; res.endT = t; res.ex = x; res.ey = y; break;
+      }
+      const nX = x / rb, nY = y / rb;
+      const cosI = ux * nX + uy * nY; // >0 바깥쪽 진행
+      const v1 = vel(type, layer, rb), v2 = vel(type, newLayer, rb);
+      if (v2 === 0) { res.end = 'stop'; res.endT = t; res.ex = x; res.ey = y; break; }
+      const sinI = Math.sqrt(Math.max(0, 1 - cosI * cosI));
+      const sinT = sinI * v2 / v1;
+      if (sinT >= 1) { // 전반사
+        ux -= 2 * cosI * nX; uy -= 2 * cosI * nY; refl = true;
+      } else {
+        let tx = ux - cosI * nX, ty = uy - cosI * nY;
+        const tl = Math.hypot(tx, ty);
+        if (tl > 1e-12) { tx /= tl; ty /= tl; } else { tx = 0; ty = 0; }
+        const cosT = Math.sqrt(1 - sinT * sinT), sg = cosI >= 0 ? 1 : -1;
+        ux = sg * cosT * nX + sinT * tx; uy = sg * cosT * nY + sinT * ty;
+        layer = newLayer;
+        if (layer >= 2) core = true;
+        if (layer === 3) inner = true;
+      }
+      x += ux * 0.01; y += uy * 0.01;
+    } else {
+      x = nx2; y = ny2; t += DT;
+    }
+    if (store) while (t >= nextSample && nextSample <= T_MAX) { pts.push(x, y); nextSample += SAMPLE; }
+  }
+  if (res.end === 'time') { res.ex = x; res.ey = y; }
+  res.inner = inner; res.core = core; res.refl = refl;
+  if (store) res.pts = new Float32Array(pts);
+  return res;
+}
 
-            detections.forEach(d => {
-                ctx.beginPath();
-                ctx.arc(d.x, d.y, 6, 0, Math.PI * 2);
-                ctx.fillStyle = "#ef4444";
-                ctx.fill();
-                ctx.font = "bold 13px Arial";
-                ctx.fillStyle = "#1e293b";
-                ctx.textAlign = d.x > centerX ? "left" : "right";
-                ctx.fillText(d.time + "s", d.x + (d.x > centerX ? 10 : -10), d.y + 5);
-            });
+function normDeg(a) { a = ((a + 180) % 360 + 360) % 360 - 180; return a === -180 ? 180 : a; }
+
+const N_RAYS = 360, DISPLAY_EVERY = 2;
+const STATIONS = []; for (let d = 10; d <= 180; d += 10) STATIONS.push(d);
+
+// 지진 하나 계산: depth(km), phi(진앙 방향 각, 라디안)
+function computeQuake(depth, phi) {
+  const rf = R_EARTH - depth, fx = rf * Math.cos(phi), fy = rf * Math.sin(phi);
+  const out = { depth, phi, fx, fy, rays: { P: [], S: [] }, arrivals: {} , maxT: 0};
+  for (const type of ['P', 'S']) {
+    const base = [];
+    for (let i = 0; i < N_RAYS; i++) {
+      const ang = phi + (i / N_RAYS) * Math.PI * 2;
+      const rr = traceRay(type, fx, fy, ang, i % DISPLAY_EVERY === 0);
+      if (rr.end === 'surface') rr.dist = normDeg((Math.atan2(rr.ey, rr.ex) - phi) * 180 / Math.PI);
+      base.push(rr);
+      if (rr.pts) out.rays[type].push(rr);
+      if (rr.end !== 'time') out.maxT = Math.max(out.maxT, rr.endT);
+    }
+    // 이웃 파선 간격이 넓은 곳은 사이에 파선을 더 쏴서 촘촘하게 (도착시간 정확도용)
+    const all = [];
+    const sameBranch = (a, b) => a.end === 'surface' && b.end === 'surface' && a.core === b.core && a.inner === b.inner && a.refl === b.refl;
+    const refine = (a, b, depthLeft) => {
+      const both = a.end === 'surface' || b.end === 'surface';
+      const need = both && (!sameBranch(a, b) || Math.abs(normDeg(b.dist - a.dist)) > 2);
+      if (depthLeft === 0 || !need) { all.push(a); return; }
+      let mid = (a.ang + b.ang) / 2; if (b.ang < a.ang) mid += Math.PI;
+      const m = traceRay(type, fx, fy, mid, false);
+      if (m.end === 'surface') m.dist = normDeg((Math.atan2(m.ey, m.ex) - phi) * 180 / Math.PI);
+      refine(a, m, depthLeft - 1); refine(m, b, depthLeft - 1);
+    };
+    for (let i = 0; i < N_RAYS; i++) refine(base[i], base[(i + 1) % N_RAYS], 7);
+    const NA = all.length;
+    // 외핵만 지난 파선이 닿는 가장 가까운 거리 — 이보다 가까운 곳의 내핵 통과 파선은 '약한 P파'
+    let outerMin = 180;
+    for (const r of all) if (r.end === 'surface' && r.core && !r.inner && !r.refl) outerMin = Math.min(outerMin, Math.abs(r.dist));
+    // 관측소 도착시간 (양쪽 관측소 각각)
+    const arr = {};
+    for (const d of STATIONS) {
+      for (const side of [1, -1]) {
+        const target = side * d === -180 ? 180 : side * d;
+        let best = null, bestIn = null;
+        for (let i = 0; i < NA; i++) {
+          const a = all[i], b = all[(i + 1) % NA];
+          if (a.end !== 'surface' || b.end !== 'surface') continue;
+          // 같은 경로 갈래(맨틀만/핵 통과/내핵 통과)끼리만 보간
+          if (a.refl || b.refl || a.core !== b.core || a.inner !== b.inner) continue;
+          const span = normDeg(b.dist - a.dist);
+          if (Math.abs(span) > 15 || span === 0) continue;
+          const off = normDeg(target - a.dist);
+          const f = off / span;
+          if (f < 0 || f > 1) continue;
+          const tt = a.endT + (b.endT - a.endT) * f;
+          if (a.inner) { if (bestIn === null || tt < bestIn) bestIn = tt; }
+          else if (best === null || tt < best) best = tt;
         }
+        // 내핵을 지난 파선만 도착하면 '약한 P파'(가는 파선 다발 → 에너지 약함)
+        let rec = null;
+        if (best !== null) rec = { t: Math.min(best, bestIn ?? Infinity), weak: false };
+        else if (bestIn !== null) rec = { t: bestIn, weak: d < outerMin - 0.5 };
+        if (rec) out.maxT = Math.max(out.maxT, rec.t);
+        arr[d + '_' + side] = rec;
+      }
+    }
+    out.arrivals[type] = arr;
+  }
+  return out;
+}
 
-        function mainLoop() {
-            let activeExists = false;
-            drawEarth();
 
-            waves.forEach(w => {
-                if (!w.active) return;
-                activeExists = true;
 
-                const dist = Math.sqrt((w.x - centerX)**2 + (w.y - centerY)**2);
-                let currentState = 'mantle';
-                if (dist <= config.innerCore.r) currentState = 'inner';
-                else if (dist <= config.outerCore.r) currentState = 'outer';
 
-                const normal = Math.atan2(w.y - centerY, w.x - centerX);
-                const incident = w.angle - normal;
+// ===================== 화면 =====================
+const $ = id => document.getElementById(id);
+const C = { p: '#2563eb', s: '#c81e1e', ink: '#1f2937', sub: '#6b7280', rock: '#d9d3c7' };
+const LAYER_COL = { crust: '#9a6b3f', mantle: '#f6c39a', outer: '#fde68a', inner: '#fffbea' };
+const FRONT_EVERY = 120; // 파면을 남기는 간격(초)
+const MAX_DEPTH = 700, MIN_DEPTH = 5;
 
-                // 상태 전이 시 굴절 로직
-                if (w.lastState !== currentState) {
-                    let refractionFactor = 0;
-                    // 속도 감소 -> 안으로 꺾임 (양수)
-                    if (w.lastState === 'mantle' && currentState === 'outer') refractionFactor = 0.8; 
-                    // 속도 증가 -> 밖으로 꺾임 (음수)
-                    else if (w.lastState === 'outer' && currentState === 'inner') refractionFactor = -0.4;
-                    // 속도 감소 -> 안으로 꺾임 (양수)
-                    else if (w.lastState === 'inner' && currentState === 'outer') refractionFactor = 0.4;
-                    // 속도 증가 -> 밖으로 꺾임 (음수)
-                    else if (w.lastState === 'outer' && currentState === 'mantle') refractionFactor = -0.6;
+const earthCv = $('earth'), ectx = earthCv.getContext('2d');
+const baseCv = document.createElement('canvas'), bctx = baseCv.getContext('2d');
+const trailCv = document.createElement('canvas'), tctx = trailCv.getContext('2d');
+const graphCv = $('graph'), gctx = graphCv.getContext('2d');
 
-                    w.angle += Math.sin(incident) * refractionFactor;
-                    w.lastState = currentState;
-                }
+let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, RPX = 0, K = 0; // K: km → px
+let quake = null, T = 0, playing = false, finished = false, lastFrame = 0;
+let speed = 60, revealed = false, selDist = null;
+const show = { P: true, S: true, front: true };
 
-                // 맨틀 내부 미세 곡선 전파
-                if (currentState === 'mantle') {
-                    w.angle -= Math.sin(incident) * 0.005; 
-                }
+// ---------- 좌표 ----------
+const sx = x => cx + x * K, sy = y => cy + y * K;
 
-                let speed = config[currentState === 'mantle' ? 'mantle' : (currentState === 'inner' ? 'innerCore' : 'outerCore')].speed;
-                const prevX = w.x;
-                const prevY = w.y;
-                w.x += Math.cos(w.angle) * speed;
-                w.y += Math.sin(w.angle) * speed;
+function posAt(ray, t) {
+  if (t >= ray.endT) return [ray.ex, ray.ey];
+  const pts = ray.pts, n = pts.length / 2;
+  const f = t / SAMPLE, k = Math.floor(f);
+  if (k + 1 < n) {
+    const u = f - k;
+    return [pts[2 * k] + (pts[2 * k + 2] - pts[2 * k]) * u, pts[2 * k + 1] + (pts[2 * k + 3] - pts[2 * k + 1]) * u];
+  }
+  const lt = (n - 1) * SAMPLE, lx = pts[2 * n - 2], ly = pts[2 * n - 1];
+  const u = ray.endT > lt ? (t - lt) / (ray.endT - lt) : 1;
+  return [lx + (ray.ex - lx) * u, ly + (ray.ey - ly) * u];
+}
 
-                ctx.beginPath();
-                ctx.strokeStyle = (currentState === 'outer') ? "#d97706" : "#3b82f6";
-                ctx.lineWidth = 2.5;
-                ctx.moveTo(prevX, prevY);
-                ctx.lineTo(w.x, w.y);
-                ctx.stroke();
+// ---------- 크기 ----------
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const r = earthCv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  for (const cv of [earthCv, baseCv, trailCv]) { cv.width = W * DPR; cv.height = H * DPR; }
+  cx = W / 2; cy = H / 2;
+  RPX = Math.min(W, H) / 2 - 40; K = RPX / R_EARTH;
+  const gr = graphCv.getBoundingClientRect();
+  graphCv.width = gr.width * DPR; graphCv.height = gr.height * DPR;
+  const vr = $('velGraph').getBoundingClientRect();
+  if (vr.width) { $('velGraph').width = vr.width * DPR; $('velGraph').height = vr.height * DPR; drawVelGraph(); }
+  drawBase(); rebuildTrail(); render(); drawGraph();
+}
 
-                ctx.beginPath();
-                ctx.arc(w.x, w.y, 4.5, 0, Math.PI * 2);
-                ctx.fillStyle = (currentState === 'outer') ? "#f59e0b" : "#3b82f6";
-                ctx.fill();
+// ---------- 바탕(지구 단면) ----------
+function circle(ctx, r, fill, stroke, lw, dash) {
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.setLineDash(dash || []); ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); ctx.setLineDash([]); }
+}
+function drawBase() {
+  const c = bctx; c.setTransform(DPR, 0, 0, DPR, 0, 0); c.clearRect(0, 0, W, H);
+  if (!revealed) {
+    circle(c, RPX, C.rock);
+  } else {
+    circle(c, RPX, LAYER_COL.crust);
+    circle(c, R_MOHO * K, LAYER_COL.mantle);
+    circle(c, R_CMB * K, LAYER_COL.outer, 'rgba(0,0,0,0.25)', 1.2);
+    circle(c, R_ICB * K, LAYER_COL.inner, 'rgba(0,0,0,0.25)', 1.2);
+  }
+  // 지진이 일어날 수 있는 깊이(0~700km)
+  c.save();
+  c.beginPath(); c.arc(cx, cy, RPX, 0, Math.PI * 2); c.arc(cx, cy, (R_EARTH - MAX_DEPTH) * K, 0, Math.PI * 2, true);
+  c.fillStyle = revealed ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.35)'; c.fill();
+  c.restore();
+  circle(c, (R_EARTH - MAX_DEPTH) * K, null, 'rgba(60,60,60,0.35)', 1, [5, 5]);
+  circle(c, RPX, null, '#6b6455', 2.5);
 
-                if (dist > earthR && w.pathLen > 40) {
-                    w.active = false;
-                    detections.push({x: w.x, y: w.y, time: ((Date.now() - w.startTime) / 1000).toFixed(2)});
-                }
-                w.pathLen++;
-            });
+  // 진앙 거리 눈금(진앙 기준)
+  if (quake) {
+    c.font = '600 12px Pretendard, sans-serif'; c.fillStyle = C.sub; c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (let d = 30; d <= 180; d += 30) for (const sd of (d === 180 ? [1] : [1, -1])) {
+      const a = quake.phi + sd * d * Math.PI / 180;
+      c.fillText(d + '°', cx + Math.cos(a) * (RPX + 31), cy + Math.sin(a) * (RPX + 31));
+    }
+  }
+  if (revealed) {
+    // 층 이름 (위쪽 세로선 따라)
+    const lab = (txt, r, sub) => {
+      const y = cy - r;
+      c.font = '800 14px Pretendard, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,0.85)'; c.strokeText(txt, cx, y);
+      c.fillStyle = '#3b2f1e'; c.fillText(txt, cx, y);
+      if (sub) { c.font = '600 11px Pretendard, sans-serif'; c.strokeText(sub, cx, y + 16); c.fillStyle = '#5b4a32'; c.fillText(sub, cx, y + 16); }
+    };
+    lab('맨틀 (고체)', (R_MOHO + R_CMB) / 2 * K, '~2,900km');
+    lab('외핵 (액체)', (R_CMB + R_ICB) / 2 * K, '~5,100km');
+    lab('내핵 (고체)', 0, '~6,371km');
+    c.font = '700 12px Pretendard, sans-serif'; c.textAlign = 'left'; c.fillStyle = '#5b3a1a';
+    c.fillText('← 지각(~35km)', cx + 6, cy - RPX + 12);
+  }
+}
 
-            if (activeExists) requestAnimationFrame(mainLoop);
-            else isLooping = false;
-        }
+// ---------- 지나간 경로(누적 그림) ----------
+function strokeRaySeg(c, ray, t0, t1) {
+  if (t0 >= ray.endT || t1 <= t0) return;
+  const te = Math.min(t1, ray.endT), pts = ray.pts, n = pts.length / 2;
+  let p = posAt(ray, t0);
+  c.moveTo(sx(p[0]), sy(p[1]));
+  for (let k = Math.floor(t0 / SAMPLE) + 1; k < n && k * SAMPLE < te; k++) c.lineTo(sx(pts[2 * k]), sy(pts[2 * k + 1]));
+  p = posAt(ray, te); c.lineTo(sx(p[0]), sy(p[1]));
+}
+function drawFrontLine(c, rays, t, width) {
+  const lim = RPX * 0.06, n = rays.length;
+  c.beginPath();
+  let prev = null;
+  for (let i = 0; i <= n; i++) {
+    const ray = rays[i % n];
+    if (t >= ray.endT) { prev = null; continue; }
+    const p = posAt(ray, t), X = sx(p[0]), Y = sy(p[1]);
+    if (prev && Math.hypot(X - prev[0], Y - prev[1]) < lim) c.lineTo(X, Y); else c.moveTo(X, Y);
+    prev = [X, Y];
+  }
+  c.lineWidth = width; c.stroke();
+}
+function trailStep(t0, t1) {
+  if (!quake) return;
+  const c = tctx; c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  for (const type of ['P', 'S']) {
+    if (!show[type]) continue;
+    const col = type === 'P' ? C.p : C.s, rays = quake.rays[type];
+    c.strokeStyle = col; c.globalAlpha = 0.28; c.lineWidth = 1;
+    c.beginPath(); rays.forEach((r, i) => { if (i % 2 === 0) strokeRaySeg(c, r, t0, t1); }); c.stroke();
+    // 파면 남기기
+    if (show.front) {
+      c.globalAlpha = 0.55;
+      for (let m = Math.floor(t0 / FRONT_EVERY) * FRONT_EVERY + FRONT_EVERY; m <= t1; m += FRONT_EVERY) {
+        if (m <= t0) continue;
+        drawFrontLine(c, rays, m, 1.3);
+      }
+    }
+    // S파가 멈춘 곳 표시
+    if (type === 'S') {
+      c.globalAlpha = 0.9; c.fillStyle = col;
+      for (const r of rays) if (r.end === 'stop' && r.endT > t0 && r.endT <= t1) {
+        c.beginPath(); c.arc(sx(r.ex), sy(r.ey), 2.2, 0, Math.PI * 2); c.fill();
+      }
+    }
+    c.globalAlpha = 1;
+  }
+}
+function rebuildTrail() {
+  tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.clearRect(0, 0, trailCv.width, trailCv.height);
+  if (quake && T > 0) trailStep(0, T);
+}
 
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const startX = e.clientX - rect.left;
-            const startY = e.clientY - rect.top;
-            const now = Date.now();
-            const angleToCenter = Math.atan2(centerY - startY, centerX - startX);
+// ---------- 관측소 ----------
+function arrival(type, d) {
+  if (!quake) return null;
+  const a = quake.arrivals[type][d + '_1'], b = quake.arrivals[type][d + '_-1'];
+  if (!a) return b; if (!b) return a;
+  return a.t <= b.t ? a : b;
+}
+function stationAngles(d) { return d === 180 ? [quake.phi + Math.PI] : [quake.phi + d * Math.PI / 180, quake.phi - d * Math.PI / 180]; }
 
-            for (let i = -1.2; i <= 1.2; i += 0.15) {
-                waves.push({ x: startX, y: startY, angle: angleToCenter + i, active: true, startTime: now, lastState: 'mantle', pathLen: 0 });
-            }
-            if (!isLooping) { isLooping = true; mainLoop(); }
-        });
+// ---------- 매 프레임 그리기 ----------
+function render() {
+  const c = ectx; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, earthCv.width, earthCv.height);
+  c.drawImage(baseCv, 0, 0); c.drawImage(trailCv, 0, 0);
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (!quake) return;
 
-        function toggleLayers() {
-            showLayers = !showLayers;
-            document.getElementById('toggleBtn').innerText = showLayers ? "내부 구조 보기: ON" : "내부 구조 보기: OFF";
-            if (!isLooping) drawEarth();
-        }
+  // 현재 파면과 파동 머리
+  if (T > 0 && !finished) for (const type of ['P', 'S']) {
+    if (!show[type]) continue;
+    const col = type === 'P' ? C.p : C.s, rays = quake.rays[type];
+    c.strokeStyle = col; c.globalAlpha = 0.9; drawFrontLine(c, rays, T, 2.6);
+    c.fillStyle = col; c.globalAlpha = 1;
+    for (const r of rays) if (T < r.endT) { const p = posAt(r, T); c.beginPath(); c.arc(sx(p[0]), sy(p[1]), 2.2, 0, Math.PI * 2); c.fill(); }
+  }
+  c.globalAlpha = 1;
 
-        function resetSimulation() { waves = []; detections = []; drawEarth(); }
-        drawEarth();
-    </script>
+  // 관측소
+  const done = finished;
+  for (const d of STATIONS) for (const a of stationAngles(d)) {
+    const ux = Math.cos(a), uy = Math.sin(a);
+    const X = cx + ux * RPX, Y = cy + uy * RPX;
+    c.save(); c.translate(X, Y); c.rotate(a + Math.PI / 2);
+    if (selDist === d) { c.beginPath(); c.arc(0, -4, 13, 0, Math.PI * 2); c.fillStyle = 'rgba(251,191,36,0.55)'; c.fill(); }
+    c.beginPath(); c.moveTo(0, -11); c.lineTo(-6, 0); c.lineTo(6, 0); c.closePath();
+    c.fillStyle = '#374151'; c.fill();
+    c.restore();
+    // 도착 표시 점 (바깥쪽)
+    const pa = arrival('P', d), sa = arrival('S', d);
+    const ox = X + ux * 13, oy = Y + uy * 13, tx = -uy, ty = ux;
+    const mark = (rec, col, off) => {
+      const px = ox + tx * off, py = oy + ty * off;
+      c.beginPath(); c.arc(px, py, 4, 0, Math.PI * 2);
+      if (rec && T >= rec.t) {
+        if (rec.weak) { c.fillStyle = '#fff'; c.fill(); c.strokeStyle = col; c.lineWidth = 1.6; c.stroke(); }
+        else { c.fillStyle = col; c.fill(); }
+      } else if (done) { c.fillStyle = '#d1d5db'; c.fill(); }
+      else { c.strokeStyle = '#c4c4c4'; c.lineWidth = 1; c.stroke(); }
+    };
+    mark(pa, C.p, -5); mark(sa, C.s, 5);
+  }
+
+  // 진원·진앙
+  const ex = cx + Math.cos(quake.phi) * RPX, ey = cy + Math.sin(quake.phi) * RPX;
+  const fxp = sx(quake.fx), fyp = sy(quake.fy);
+  c.setLineDash([3, 3]); c.strokeStyle = '#111'; c.lineWidth = 1.2;
+  c.beginPath(); c.moveTo(ex, ey); c.lineTo(fxp, fyp); c.stroke(); c.setLineDash([]);
+  star(c, fxp, fyp, 9, '#fbbf24', '#111');
+  c.beginPath(); c.arc(ex, ey, 5, 0, Math.PI * 2); c.fillStyle = '#111'; c.fill();
+  const lx = cx + Math.cos(quake.phi) * (RPX + 31), ly = cy + Math.sin(quake.phi) * (RPX + 31);
+  c.font = '800 13px Pretendard, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 4; c.strokeStyle = '#fff'; c.strokeText('진앙', lx, ly); c.fillStyle = '#111'; c.fillText('진앙', lx, ly);
+}
+function star(c, x, y, r, fill, stroke) {
+  c.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+    c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  c.closePath(); c.fillStyle = fill; c.fill(); c.strokeStyle = stroke; c.lineWidth = 1.3; c.stroke();
+}
+
+// ---------- 그래프 ----------
+const G_TMAX = 26; // 분
+function drawGraph() {
+  const c = gctx, w = graphCv.width / DPR, h = graphCv.height / DPR;
+  c.setTransform(DPR, 0, 0, DPR, 0, 0); c.clearRect(0, 0, w, h);
+  const L = 40, Rm = 10, Tm = 8, stripH = 16, B = 26 + stripH * 2 + 12;
+  const pw = w - L - Rm, ph = h - Tm - B;
+  const gx = d => L + d / 180 * pw, gy = m => Tm + ph - m / G_TMAX * ph;
+  c.font = '12px Pretendard, sans-serif'; c.textBaseline = 'middle';
+  // 격자
+  for (let m = 0; m <= 25; m += 5) {
+    c.strokeStyle = m ? '#f0ede6' : '#9ca3af'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(L, gy(m)); c.lineTo(L + pw, gy(m)); c.stroke();
+    c.fillStyle = C.sub; c.textAlign = 'right'; c.fillText(m + '분', L - 5, gy(m));
+  }
+  for (let d = 0; d <= 180; d += 30) {
+    c.strokeStyle = d ? '#f0ede6' : '#9ca3af';
+    c.beginPath(); c.moveTo(gx(d), Tm); c.lineTo(gx(d), Tm + ph); c.stroke();
+    c.fillStyle = C.sub; c.textAlign = 'center'; c.fillText(d + '°', gx(d), Tm + ph + 11);
+  }
+  c.textAlign = 'right'; c.fillStyle = C.sub; c.font = '600 11px Pretendard, sans-serif';
+  c.fillText('진앙 거리 →', L + pw, Tm + ph - 9);
+  if (selDist) { c.fillStyle = 'rgba(251,191,36,0.25)'; c.fillRect(gx(selDist) - 6, Tm, 12, ph); }
+
+  // 비교선: 속도가 어디서나 같은 지구
+  if (quake && $('showUniform').checked) {
+    const rf = R_EARTH - quake.depth;
+    for (const [v, col] of [[10, C.p], [5.6, C.s]]) {
+      c.strokeStyle = col; c.globalAlpha = 0.55; c.lineWidth = 1.6; c.setLineDash([6, 5]);
+      c.beginPath(); let started = false;
+      for (let d = 0; d <= 180; d += 1) {
+        const a = d * Math.PI / 180, dist = Math.sqrt(rf * rf + R_EARTH * R_EARTH - 2 * rf * R_EARTH * Math.cos(a));
+        const m = dist / v / 60; if (m > G_TMAX) break;
+        started ? c.lineTo(gx(d), gy(m)) : c.moveTo(gx(d), gy(m)); started = true;
+      }
+      c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+    }
+    c.font = '600 11px Pretendard, sans-serif'; c.textAlign = 'left'; c.fillStyle = C.sub;
+    c.fillText('점선: 속도가 어디서나 같다면', L + 6, Tm + 9);
+  }
+
+  // 관측값
+  if (quake) for (const d of STATIONS) {
+    const pa = arrival('P', d), sa = arrival('S', d);
+    if (sa && T >= sa.t) { const X = gx(d), Y = gy(sa.t / 60); c.beginPath(); c.moveTo(X, Y - 6); c.lineTo(X - 5.5, Y + 4); c.lineTo(X + 5.5, Y + 4); c.closePath(); c.fillStyle = C.s; c.fill(); }
+    if (pa && T >= pa.t) {
+      const X = gx(d), Y = gy(pa.t / 60); c.beginPath(); c.arc(X, Y, 5, 0, Math.PI * 2);
+      if (pa.weak) { c.fillStyle = '#fff'; c.fill(); c.strokeStyle = C.p; c.lineWidth = 2; c.stroke(); }
+      else { c.fillStyle = C.p; c.fill(); }
+    }
+  }
+  // 범례
+  c.font = '600 12px Pretendard, sans-serif'; c.textAlign = 'left';
+  let lx = L + 8, ly = Tm + ($('showUniform').checked && quake ? 26 : 10);
+  c.beginPath(); c.arc(lx + 4, ly, 4.5, 0, Math.PI * 2); c.fillStyle = C.p; c.fill(); c.fillStyle = C.ink; c.fillText('P파', lx + 12, ly);
+  lx += 44; c.beginPath(); c.arc(lx + 4, ly, 4.5, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); c.strokeStyle = C.p; c.lineWidth = 2; c.stroke(); c.fillStyle = C.ink; c.fillText('약한 P파', lx + 12, ly);
+  lx += 70; c.beginPath(); c.moveTo(lx + 4, ly - 5); c.lineTo(lx - 1, ly + 4); c.lineTo(lx + 9, ly + 4); c.closePath(); c.fillStyle = C.s; c.fill(); c.fillStyle = C.ink; c.fillText('S파', lx + 14, ly);
+
+  // 도착 여부 띠
+  const top = Tm + ph + 24, cw = pw / 18;
+  for (const [row, type, col] of [[0, 'P', C.p], [1, 'S', C.s]]) {
+    const y = top + row * (stripH + 4);
+    c.fillStyle = C.ink; c.font = '700 11px Pretendard, sans-serif'; c.textAlign = 'right'; c.fillText(type + '파', L - 5, y + stripH / 2);
+    STATIONS.forEach((d, i) => {
+      const x = L + i * cw + 1, rec = arrival(type, d);
+      const arrived = rec && T >= rec.t;
+      if (arrived && !rec.weak) { c.fillStyle = col; c.fillRect(x, y, cw - 2, stripH); }
+      else if (arrived && rec.weak) { c.fillStyle = col + '40'; c.fillRect(x, y, cw - 2, stripH); c.fillStyle = col; c.textAlign = 'center'; c.font = '700 10px Pretendard, sans-serif'; c.fillText('약', x + cw / 2 - 1, y + stripH / 2 + 1); }
+      else if (quake && finished) {
+        c.fillStyle = '#e5e7eb'; c.fillRect(x, y, cw - 2, stripH);
+        c.strokeStyle = '#9ca3af'; c.lineWidth = 1.2; c.beginPath();
+        c.moveTo(x + cw / 2 - 4, y + 4); c.lineTo(x + cw / 2 + 2, y + stripH - 4); c.moveTo(x + cw / 2 + 2, y + 4); c.lineTo(x + cw / 2 - 4, y + stripH - 4); c.stroke();
+      } else { c.strokeStyle = '#e5e1d8'; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, cw - 3, stripH - 1); }
+    });
+  }
+}
+
+// ---------- 깊이별 속도 그래프 (공개 후) ----------
+function drawVelGraph() {
+  const cv = $('velGraph'), c = cv.getContext('2d'), w = cv.width / DPR, h = cv.height / DPR;
+  if (!w) return;
+  c.setTransform(DPR, 0, 0, DPR, 0, 0); c.clearRect(0, 0, w, h);
+  const L = 44, Rm = 10, Tm = 18, B = 26, pw = w - L - Rm, ph = h - Tm - B;
+  const gx = d => L + d / 6371 * pw, gy = v => Tm + ph - v / 14 * ph;
+  // 층 배경
+  [[0, 35, LAYER_COL.crust], [35, 2891, LAYER_COL.mantle], [2891, 5150, LAYER_COL.outer], [5150, 6371, LAYER_COL.inner]].forEach(([a, b, col]) => {
+    c.fillStyle = col; c.globalAlpha = 0.55; c.fillRect(gx(a), Tm, gx(b) - gx(a), ph); c.globalAlpha = 1;
+  });
+  c.font = '11px Pretendard, sans-serif'; c.fillStyle = C.sub; c.textBaseline = 'middle';
+  for (let v = 0; v <= 14; v += 2) { c.textAlign = 'right'; c.fillText(v, L - 5, gy(v)); }
+  for (const d of [0, 2900, 5100, 6371]) { c.textAlign = 'center'; c.fillText(d.toLocaleString() + 'km', Math.min(gx(d), L + pw - 22), Tm + ph + 12); }
+  c.textAlign = 'left'; c.font = '600 11px Pretendard, sans-serif'; c.fillText('속도(km/s)', 4, 8);
+  for (const [type, col] of [['P', C.p], ['S', C.s]]) {
+    c.strokeStyle = col; c.lineWidth = 2.2; c.beginPath(); let pen = false;
+    for (let d = 0; d <= 6371; d += 5) {
+      const r = R_EARTH - d, v = vel(type, layerOf(r), r);
+      if (v === 0) { pen = false; continue; }
+      if (type === 'S' && layerOf(r) === 3) { pen = false; continue; }
+      pen ? c.lineTo(gx(d), gy(v)) : c.moveTo(gx(d), gy(v)); pen = true;
+    }
+    c.stroke();
+  }
+  c.font = '700 12px Pretendard, sans-serif'; c.fillStyle = C.p; c.fillText('P파', gx(1500), gy(12.6) - 10);
+  c.fillStyle = C.s; c.fillText('S파', gx(1500), gy(6.6) + 12);
+  c.fillStyle = C.s; c.font = '600 11px Pretendard, sans-serif'; c.fillText('S파 없음', gx(3300), gy(1.2));
+}
+
+// ---------- 기록표 ----------
+function fmt(sec) { const m = Math.floor(sec / 60), s = Math.floor(sec % 60); return m + '분 ' + String(s).padStart(2, '0') + '초'; }
+function cell(rec, cls) {
+  if (rec && T >= rec.t) return rec.weak ? `<span class="tw">약하게 ${fmt(rec.t)}</span>` : `<span class="${cls}">${fmt(rec.t)}</span>`;
+  return finished ? '<span class="tn">도착 안 함</span>' : '<span class="tn">…</span>';
+}
+let lastTableKey = '';
+function updateTable(force) {
+  if (!quake) { $('recEmpty').style.display = ''; $('recTable').style.display = 'none'; return; }
+  $('recEmpty').style.display = 'none'; $('recTable').style.display = '';
+  const key = STATIONS.map(d => { const p = arrival('P', d), s = arrival('S', d); return (p && T >= p.t ? 1 : 0) + '' + (s && T >= s.t ? 1 : 0); }).join('') + finished + selDist;
+  if (key === lastTableKey && !force) return; lastTableKey = key;
+  $('recTable').querySelector('tbody').innerHTML = STATIONS.map(d =>
+    `<tr data-d="${d}" class="${selDist === d ? 'sel' : ''}"><td>${d}°</td><td>${cell(arrival('P', d), 'tp')}</td><td>${cell(arrival('S', d), 'ts')}</td></tr>`).join('');
+}
+$('recTable').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-d]'); if (!tr) return;
+  const d = +tr.dataset.d; selDist = selDist === d ? null : d;
+  updateTable(true); render(); drawGraph();
+});
+
+// ---------- 시계 / 정보 ----------
+function updateClock() { $('clock').textContent = quake ? fmt(T) : '--분 --초'; }
+function updateInfo() {
+  $('info').innerHTML = quake
+    ? `진원 깊이 <b>${Math.round(quake.depth)}km</b> · 다른 곳을 누르면 새 지진이 일어나요.`
+    : '지표 가까운 곳(지하 0~700km)을 눌러 지진을 일으켜 보세요.';
+}
+let toastTimer = null;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200); }
+
+// ---------- 애니메이션 ----------
+function endTime() { return quake.maxT + 20; }
+function loop(now) {
+  if (!playing) return;
+  const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  const t0 = T; T = Math.min(endTime(), T + dt * speed);
+  trailStep(t0, T);
+  if (T >= endTime()) { finished = true; playing = false; setPlayBtn(); }
+  render(); drawGraph(); updateTable(); updateClock();
+  if (playing) requestAnimationFrame(loop);
+}
+function play() { if (!quake) return; if (finished) { restart(); return; } playing = true; lastFrame = performance.now(); setPlayBtn(); requestAnimationFrame(loop); }
+function pause() { playing = false; setPlayBtn(); }
+function restart() { T = 0; finished = false; rebuildTrail(); updateTable(true); playing = true; lastFrame = performance.now(); setPlayBtn(); requestAnimationFrame(loop); }
+function setPlayBtn() {
+  const b = $('playBtn'); b.disabled = !quake; $('replayBtn').disabled = !quake;
+  b.textContent = playing ? '⏸ 일시정지' : (finished ? '▶ 처음부터' : '▶ 계속');
+}
+
+// ---------- 지진 일으키기 ----------
+earthCv.addEventListener('pointerdown', e => {
+  const r = earthCv.getBoundingClientRect();
+  const x = e.clientX - r.left - cx, y = e.clientY - r.top - cy;
+  const rk = Math.hypot(x, y) / K;
+  if (rk > R_EARTH * 1.12) return; // 지구 밖 먼 곳은 무시
+  let depth = R_EARTH - rk;
+  if (depth > MAX_DEPTH) { toast('지진은 지하 약 700km보다 깊은 곳에서는 거의 일어나지 않아요. 700km 깊이로 맞췄어요.'); depth = MAX_DEPTH; }
+  depth = Math.max(MIN_DEPTH, depth);
+  const phi = Math.atan2(y, x);
+  playing = false;
+  $('info').innerHTML = '지진파 경로를 계산하는 중…';
+  setTimeout(() => {
+    quake = computeQuake(depth, phi);
+    selDist = null; drawBase(); updateInfo(); restart();
+  }, 20);
+});
+
+// ---------- 버튼 ----------
+$('playBtn').onclick = () => playing ? pause() : play();
+$('replayBtn').onclick = () => { if (quake) restart(); };
+$('clearBtn').onclick = () => {
+  playing = false; quake = null; T = 0; finished = false; selDist = null;
+  drawBase(); rebuildTrail(); render(); drawGraph(); updateTable(true); updateClock(); updateInfo(); setPlayBtn();
+};
+$('revealBtn').onclick = () => {
+  revealed = !revealed;
+  $('revealBtn').classList.toggle('on', revealed);
+  $('revealBtn').textContent = revealed ? '🙈 내부 구조 숨기기' : '🔍 내부 구조 공개';
+  const st = $('structTab'); st.disabled = !revealed; st.textContent = revealed ? '내부 구조' : '🔒 내부 구조';
+  if (revealed) openTab('struct'); else if (st.classList.contains('on')) openTab('quest');
+  drawBase(); render();
+};
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => openTab(b.dataset.tab));
+function openTab(name) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + name));
+  if (name === 'struct') requestAnimationFrame(() => {
+    const vr = $('velGraph').getBoundingClientRect();
+    $('velGraph').width = vr.width * DPR; $('velGraph').height = vr.height * DPR; drawVelGraph();
+  });
+}
+$('speed').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  speed = +b.dataset.v;
+  document.querySelectorAll('#speed button').forEach(x => x.classList.toggle('on', x === b));
+});
+for (const [id, key] of [['showP', 'P'], ['showS', 'S'], ['showFront', 'front']]) {
+  $(id).onchange = () => { show[key] = $(id).checked; rebuildTrail(); render(); };
+}
+$('showUniform').onchange = drawGraph;
+
+window.addEventListener('resize', resize);
+resize(); updateTable(true); setPlayBtn();
+</script>
 </body>
 </html>
